@@ -9,22 +9,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// registerVersionCommand registers the version command with the root command.
-// This function is called from RegisterCommands in root.go.
-func registerVersionCommand(root *cobra.Command) {
-	root.AddCommand(newVersionCommand())
+// versionCmd represents the version command
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Display version information",
+	Long:  `Display the current version of the erst CLI tool.`,
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("erst version %s\n", Version)
+	},
 }
 
-// newVersionCommand creates and returns the version command.
-func newVersionCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "version",
-		Short: "Print the version number of erst",
-		Long:  `Display the current version of the erst CLI tool.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("erst version %s\n", Version)
-		},
-	}
-
-	return cmd
+func init() {
+	rootCmd.AddCommand(versionCmd)
 }

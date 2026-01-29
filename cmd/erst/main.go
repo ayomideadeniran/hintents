@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/dotandev/hintents/internal/cmd"
+	"github.com/dotandev/hintents/internal/updater"
 )
 
 // Version is the current version of erst
@@ -16,6 +17,10 @@ var Version = "dev"
 func main() {
 	// Set version in cmd package
 	cmd.Version = Version
+
+	// Start update checker in background (non-blocking)
+	checker := updater.NewChecker(Version)
+	go checker.CheckForUpdates()
 
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
