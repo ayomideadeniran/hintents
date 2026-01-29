@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dotandev/hintents/internal/logger"
@@ -52,6 +53,20 @@ const (
 	FuturenetSorobanURL = "https://rpc-futurenet.stellar.org"
 )
 
+// authTransport is a custom HTTP RoundTripper that adds authentication headers
+type authTransport struct {
+	token     string
+	transport http.RoundTripper
+}
+
+// RoundTrip implements http.RoundTripper interface
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.token != "" {
+		// Add Bearer token to Authorization header
+		req.Header.Set("Authorization", "Bearer "+t.token)
+	}
+	return t.transport.RoundTrip(req)
+}
 // NetworkConfig represents a Stellar network configuration
 type NetworkConfig struct {
 	Name              string
@@ -89,6 +104,7 @@ type Client struct {
 	Horizon    horizonclient.ClientInterface
 	Network    Network
 	SorobanURL string
+	token      string // stored for reference, not logged
 	Config     NetworkConfig
 }
 
@@ -101,58 +117,105 @@ type TransactionResponse struct {
 
 // NewClient creates a new RPC client with the specified network
 // If network is empty, defaults to Mainnet
-func NewClient(net Network) *Client {
+// Token can be provided via the token parameter or ERST_RPC_TOKEN environment variable
+func NewClient(net Network, token string) *Client {
 	if net == "" {
 		net = Mainnet
 	}
 
+	// Check environment variable if token not provided
+	if token == "" {
+		token = os.Getenv("ERST_RPC_TOKEN")
+	}
+
 	var horizonClient *horizonclient.Client
 	var sorobanURL string
+	httpClient := createHTTPClient(token)
 	var config NetworkConfig
 
 	switch net {
 	case Testnet:
-		horizonClient = horizonclient.DefaultTestNetClient
+		horizonClient = &horizonclient.Client{
+			HorizonURL: TestnetHorizonURL,
+			HTTP:       httpClient,
+		}
 		sorobanURL = TestnetSorobanURL
 		config = TestnetConfig
 	case Futurenet:
-		// Create a futurenet client (not available as default)
 		horizonClient = &horizonclient.Client{
 			HorizonURL: FuturenetHorizonURL,
-			HTTP:       http.DefaultClient,
+			HTTP:       httpClient,
 		}
 		sorobanURL = FuturenetSorobanURL
 		config = FuturenetConfig
 	case Mainnet:
 		fallthrough
 	default:
-		horizonClient = horizonclient.DefaultPublicNetClient
+		horizonClient = &horizonclient.Client{
+			HorizonURL: MainnetHorizonURL,
+			HTTP:       httpClient,
+		}
 		sorobanURL = MainnetSorobanURL
 		config = MainnetConfig
+	}
+
+	if token != "" {
+		logger.Logger.Debug("RPC client initialized with authentication")
+	} else {
+		logger.Logger.Debug("RPC client initialized without authentication")
 	}
 
 	return &Client{
 		Horizon:    horizonClient,
 		Network:    net,
 		SorobanURL: sorobanURL,
+		token:      token,
 		Config:     config,
 	}
 }
 
 // NewClientWithURL creates a new RPC client with a custom Horizon URL
-func NewClientWithURL(url string, net Network) *Client {
-	// Re-use logic to get default Soroban URL
-	defaultClient := NewClient(net)
+// Token can be provided via the token parameter or ERST_RPC_TOKEN environment variable
+func NewClientWithURL(url string, net Network, token string) *Client {
+	// Check environment variable if token not provided
+	if token == "" {
+		token = os.Getenv("ERST_RPC_TOKEN")
+	}
 
+	// Re-use logic to get default Soroban URL
+	defaultClient := NewClient(net, token)
+
+	httpClient := createHTTPClient(token)
 	horizonClient := &horizonclient.Client{
 		HorizonURL: url,
-		HTTP:       http.DefaultClient,
+		HTTP:       httpClient,
+	}
+
+	if token != "" {
+		logger.Logger.Debug("RPC client initialized with authentication")
+	} else {
+		logger.Logger.Debug("RPC client initialized without authentication")
 	}
 
 	return &Client{
 		Horizon:    horizonClient,
 		Network:    net,
 		SorobanURL: defaultClient.SorobanURL,
+		token:      token,
+	}
+}
+
+// createHTTPClient creates an HTTP client with optional authentication
+func createHTTPClient(token string) *http.Client {
+	if token == "" {
+		return http.DefaultClient
+	}
+
+	return &http.Client{
+		Transport: &authTransport{
+			token:     token,
+			transport: http.DefaultTransport,
+		},
 		Config:     defaultClient.Config,
 	}
 }

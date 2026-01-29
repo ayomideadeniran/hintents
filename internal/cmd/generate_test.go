@@ -47,9 +47,9 @@ Example:
 		// Create RPC client
 		var client *rpc.Client
 		if rpcURLFlag != "" {
-			client = rpc.NewClientWithURL(rpcURLFlag, rpc.Network(networkFlag))
+			client = rpc.NewClientWithURL(rpcURLFlag, rpc.Network(networkFlag), rpcTokenFlag)
 		} else {
-			client = rpc.NewClient(rpc.Network(networkFlag))
+			client = rpc.NewClient(rpc.Network(networkFlag), rpcTokenFlag)
 		}
 
 		// Get current working directory as default output
@@ -78,6 +78,7 @@ func init() {
 	generateTestCmd.Flags().StringVarP(&genTestName, "name", "", "", "Custom test name (defaults to transaction hash)")
 	generateTestCmd.Flags().StringVarP(&networkFlag, "network", "n", string(rpc.Mainnet), "Stellar network to use (testnet, mainnet, futurenet)")
 	generateTestCmd.Flags().StringVar(&rpcURLFlag, "rpc-url", "", "Custom Horizon RPC URL to use")
+	generateTestCmd.Flags().StringVar(&rpcTokenFlag, "rpc-token", "", "RPC authentication token (can also use ERST_RPC_TOKEN env var)")
 
 	rootCmd.AddCommand(generateTestCmd)
 }
