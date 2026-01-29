@@ -10,6 +10,10 @@ type SimulationRequest struct {
 	LedgerEntries map[string]string `json:"ledger_entries,omitempty"`
 	// XDR encoded LedgerHeader (optional, for context)
 	// LedgerHeaderXdr string `json:"ledger_header_xdr,omitempty"`
+	// Path to local WASM file for local replay (optional)
+	WasmPath *string `json:"wasm_path,omitempty"`
+	// Mock arguments for local replay (optional, JSON array of strings)
+	MockArgs *[]string `json:"mock_args,omitempty"`
 }
 
 // SimulationResponse is the JSON object returned by the Rust binary via Stdout

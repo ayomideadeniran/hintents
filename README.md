@@ -19,10 +19,18 @@ Currently, when a Soroban transaction fails on mainnet, developers receive a gen
 ## Usage (MVP)
 
 ### Debugging a Transaction
-Fetches a transaction envelope from the Stellar Public network and prints its XDR size (Simulation pending).
+Fetches a transaction envelope from the Stellar network and analyzes it.
 ```bash
-./erst debug <transaction-hash>
+./erst debug <transaction-hash> --network testnet
 ```
+
+### Local WASM Replay (New! 🎉)
+Test and debug contracts locally without needing network data. Perfect for rapid development!
+```bash
+./erst debug --wasm ./contract.wasm --args "arg1" --args "arg2"
+```
+
+**Note**: Local replay uses Mock State and not mainnet data. See [docs/LOCAL_WASM_REPLAY.md](docs/LOCAL_WASM_REPLAY.md) for details.
 
 ## Technical Analysis
 

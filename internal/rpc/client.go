@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/stellar/go/clients/horizonclient"
@@ -12,30 +11,30 @@ type Client struct {
 	Horizon *horizonclient.Client
 }
 
-// NewClient creates a new RPC client (defaults to Public Network for now)
-func NewClient() *Client {
-	return &Client{
-		Horizon: horizonclient.DefaultPublicNetClient,
+// NewClient creates a new RPC client for the specified network
+func NewClient(network string) (*Client, error) {
+	var horizon *horizonclient.Client
+
+	switch network {
+	case "testnet":
+		horizon = horizonclient.DefaultTestNetClient
+	case "mainnet", "public":
+		horizon = horizonclient.DefaultPublicNetClient
+	default:
+		return nil, fmt.Errorf("unsupported network: %s (use 'testnet' or 'mainnet')", network)
 	}
+
+	return &Client{
+		Horizon: horizon,
+	}, nil
 }
 
-// TransactionResponse contains the raw XDR fields needed for simulation
-type TransactionResponse struct {
-	EnvelopeXdr   string
-	ResultXdr     string
-	ResultMetaXdr string
-}
-
-// GetTransaction fetches the transaction details and full XDR data
-func (c *Client) GetTransaction(ctx context.Context, hash string) (*TransactionResponse, error) {
+// GetTransaction fetches the transaction details and returns envelope and result meta XDR
+func (c *Client) GetTransaction(hash string) (envelopeXdr, resultMetaXdr string, err error) {
 	tx, err := c.Horizon.TransactionDetail(hash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch transaction: %w", err)
+		return "", "", fmt.Errorf("failed to fetch transaction: %w", err)
 	}
 
-	return &TransactionResponse{
-		EnvelopeXdr:   tx.EnvelopeXdr,
-		ResultXdr:     tx.ResultXdr,
-		ResultMetaXdr: tx.ResultMetaXdr,
-	}, nil
+	return tx.EnvelopeXdr, tx.ResultMetaXdr, nil
 }
