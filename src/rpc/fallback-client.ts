@@ -7,6 +7,10 @@ interface RPCEndpoint {
     failureCount: number;
     lastFailure: number | null;
     circuitOpen: boolean;
+    totalRequests: number;
+    totalSuccess: number;
+    totalFailure: number;
+    averageDuration: number;
 }
 
 export class FallbackRPCClient {
@@ -23,6 +27,10 @@ export class FallbackRPCClient {
             failureCount: 0,
             lastFailure: null,
             circuitOpen: false,
+            totalRequests: 0,
+            totalSuccess: 0,
+            totalFailure: 0,
+            averageDuration: 0,
         }));
 
         // Initialize axios clients for each endpoint
@@ -32,6 +40,7 @@ export class FallbackRPCClient {
                 timeout: config.timeout,
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(config.headers || {}),
                 },
             }));
         });
@@ -58,22 +67,27 @@ export class FallbackRPCClient {
             }
 
             try {
+                endpoint.totalRequests++;
                 console.log(`🔄 Attempting RPC request to: ${endpoint.url}`);
 
                 const client = this.clients.get(endpoint.url)!;
                 const response = await this.executeWithRetry(client, path, data);
 
+                const duration = Date.now() - startTime;
+                this.updateMetrics(endpoint, duration, true);
+
                 // Success! Mark endpoint as healthy and reset to primary
                 this.markSuccess(endpoint);
                 this.currentIndex = 0; // Return to primary
 
-                const duration = Date.now() - startTime;
                 console.log(`✅ RPC request successful (${duration}ms)`);
 
                 return response.data;
 
             } catch (error) {
                 lastError = error as Error;
+                const duration = Date.now() - startTime;
+                this.updateMetrics(endpoint, duration, false);
 
                 // Determine if this is a retryable error
                 if (this.isRetryableError(error)) {
@@ -93,9 +107,24 @@ export class FallbackRPCClient {
         }
 
         // All endpoints failed
-        const duration = Date.now() - startTime;
-        console.error(`❌ All RPC endpoints failed after ${duration}ms`);
+        const totalDuration = Date.now() - startTime;
+        console.error(`❌ All RPC endpoints failed after ${totalDuration}ms`);
         throw new Error(`All RPC endpoints failed: ${lastError?.message}`);
+    }
+
+    /**
+     * Update performance metrics for an endpoint
+     */
+    private updateMetrics(endpoint: RPCEndpoint, duration: number, success: boolean): void {
+        if (success) {
+            endpoint.totalSuccess++;
+        } else {
+            endpoint.totalFailure++;
+        }
+
+        // Running average calculation
+        const count = endpoint.totalSuccess + endpoint.totalFailure;
+        endpoint.averageDuration = (endpoint.averageDuration * (count - 1) + duration) / count;
     }
 
     /**
@@ -220,12 +249,24 @@ export class FallbackRPCClient {
         healthy: boolean;
         failureCount: number;
         circuitOpen: boolean;
+        metrics: {
+            totalRequests: number;
+            totalSuccess: number;
+            totalFailure: number;
+            averageDuration: number;
+        };
     }> {
         return this.endpoints.map(ep => ({
             url: ep.url,
             healthy: ep.healthy,
             failureCount: ep.failureCount,
             circuitOpen: ep.circuitOpen,
+            metrics: {
+                totalRequests: ep.totalRequests,
+                totalSuccess: ep.totalSuccess,
+                totalFailure: ep.totalFailure,
+                averageDuration: Math.round(ep.averageDuration),
+            },
         }));
     }
 

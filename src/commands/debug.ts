@@ -60,7 +60,13 @@ export function registerDebugCommand(program: Command): void {
                 status.forEach((ep, idx) => {
                     const statusIcon = ep.healthy ? '✅' : '❌';
                     const circuit = ep.circuitOpen ? ' [CIRCUIT OPEN]' : '';
+                    const successRate = ep.metrics.totalRequests > 0
+                        ? ((ep.metrics.totalSuccess / ep.metrics.totalRequests) * 100).toFixed(1)
+                        : '0.0';
+
                     console.log(`  [${idx + 1}] ${statusIcon} ${ep.url}${circuit}`);
+                    console.log(`      Success Rate: ${successRate}% (${ep.metrics.totalSuccess}/${ep.metrics.totalRequests})`);
+                    console.log(`      Avg Duration: ${ep.metrics.averageDuration}ms`);
                     console.log(`      Failures: ${ep.failureCount}`);
                 });
 
