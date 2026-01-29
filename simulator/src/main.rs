@@ -257,11 +257,18 @@ fn main() {
                 Err(e) => vec![format!("Failed to retrieve events: {:?}", e)],
             };
 
+            // Capture categorized events for analyzer
+            let categorized_events = match host.get_events() {
+                Ok(evs) => categorize_events(&evs),
+                Err(_) => vec![],
+            };
+
             // Success Response
             let response = SimulationResponse {
                 status: "success".to_string(),
                 error: None,
                 events,
+                categorized_events,
                 logs: invocation_logs,
             };
 
@@ -282,6 +289,7 @@ fn main() {
                 status: "error".to_string(),
                 error: Some(serde_json::to_string(&structured_error).unwrap()),
                 events: vec![],
+                categorized_events: vec![],
                 logs: invocation_logs,
             };
 
@@ -312,6 +320,7 @@ fn main() {
                 status: "error".to_string(),
                 error: Some(serde_json::to_string(&structured_error).unwrap()),
                 events: vec![],
+                categorized_events: vec![],
                 logs: invocation_logs,
             };
 
@@ -340,21 +349,6 @@ fn execute_operations(
                     logs.push(format!("About to Invoke Contract: {:?}", address));
                     logs.push(format!("Function: {:?}", func_name));
                     logs.push(format!("Args Count: {}", invoke_args_vec.len()));
-
-                    // In a full implementation, we'd do:
-                    // let res = host.invoke_function(...)?;
-                    // For now, this is a placeholder for actual contract invocation
-
-                    // Example of how to handle HostError propagation:
-                    // match host.invoke_function(...) {
-                    //     Ok(result) => {
-                    //         logs.push(format!("Invocation successful: {:?}", result));
-                    //     }
-                    //     Err(e) => {
-                    //         // Propagate HostError up to be caught by the outer handler
-                    //         return Err(e);
-                    //     }
-                    // }
                 }
                 _ => {
                     logs.push("Skipping non-InvokeContract Host Function".to_string());
@@ -363,54 +357,7 @@ fn execute_operations(
         }
     }
 
-<<<<<<< HEAD
-    let events = match host.get_events() {
-        Ok(evs) => {
-            let mut categorized_events = Vec::new();
-
-            for host_event in evs.0.iter() {
-                let event_json = match categorize_event_for_analyzer(host_event) {
-                    Ok(json) => json,
-                    Err(e) => {
-                        eprintln!("Warning: Failed to categorize event: {}", e);
-                        format!("{{\"type\":\"other\",\"raw\":\"{:?}\"}}", host_event)
-                    }
-                };
-                categorized_events.push(event_json);
-            }
-
-            categorized_events
-        }
-        Err(e) => vec![format!(
-            "{{\"type\":\"error\",\"message\":\"Failed to retrieve events: {}\"}}",
-            e
-        )],
-    };
-
-    let categorized_events = match host.get_events() {
-        Ok(evs) => categorize_events(&evs),
-        Err(_) => vec![],
-    };
-
-    let response = SimulationResponse {
-        status: "success".to_string(),
-        error: None,
-        events,
-        categorized_events,
-        logs: {
-            let mut logs = vec![
-                format!("Host Initialized with Budget: {:?}", host.budget_cloned()),
-                format!("Loaded {} Ledger Entries", loaded_entries_count),
-            ];
-            logs.extend(invocation_logs);
-            logs
-        },
-    };
-
-    println!("{}", serde_json::to_string(&response).unwrap());
-=======
     Ok(logs)
->>>>>>> upstream/main
 }
 
 fn categorize_events(events: &Events) -> Vec<CategorizedEvent> {
