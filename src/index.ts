@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { registerProtocolCommands } from './commands/protocol-handler';
+import { registerAuditCommands } from './commands/audit';
 
 const program = new Command();
 
@@ -11,6 +12,9 @@ program
 
 // Register protocol-specific commands
 registerProtocolCommands(program);
+
+// Register audit commands
+registerAuditCommands(program);
 
 program.parse(process.argv);
 
