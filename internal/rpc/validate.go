@@ -10,11 +10,24 @@ import (
 
 func isValidURL(urlStr string) error {
 	if urlStr == "" {
-		return fmt.Errorf("URL is empty")
+		return fmt.Errorf("URL cannot be empty")
 	}
 
 	parsed, err := url.Parse(urlStr)
 	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	if parsed.Scheme == "" {
+		return fmt.Errorf("URL must include scheme (http:// or https://)")
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("URL scheme must be http or https, got %q", parsed.Scheme)
+	}
+
+	if parsed.Host == "" {
+		return fmt.Errorf("URL must include a host")
 		return fmt.Errorf("failed to parse URL: %w", err)
 	}
 
@@ -52,6 +65,14 @@ func ValidateNetworkConfig(config NetworkConfig) error {
 		if err := isValidURL(config.SorobanRPCURL); err != nil {
 			return fmt.Errorf("invalid SorobanRPCURL: %w", err)
 		}
+	}
+
+	if config.HorizonURL == "" && config.SorobanRPCURL == "" {
+		return fmt.Errorf("at least one of HorizonURL or SorobanRPCURL must be provided")
+	}
+
+	if config.NetworkPassphrase == "" {
+		return fmt.Errorf("network passphrase is required")
 	}
 
 	return nil

@@ -95,6 +95,11 @@ var (
 type Client struct {
 	HorizonURL   string
 	Horizon      horizonclient.ClientInterface
+	Network      Network
+	SorobanURL   string
+	AltURLs      []string
+	mu           sync.RWMutex
+	currIndex    int
 	AltURLs      []string
 	currIndex    int
 	mu           sync.RWMutex
@@ -128,6 +133,20 @@ func NewClientWithURLOption(url string, net Network, token string) *Client {
 	return client
 }
 
+	httpClient := createHTTPClient(token)
+
+	return &Client{
+		HorizonURL: urls[0],
+		Horizon: &horizonclient.Client{
+			HorizonURL: urls[0],
+			HTTP:       httpClient,
+		},
+		Network:      net,
+		SorobanURL:   sorobanURL,
+		AltURLs:      urls,
+		token:        token,
+		Config:       config,
+		CacheEnabled: true,
 // NewClientWithURLsOption creates a new RPC client with multiple Horizon URLs for failover
 // Deprecated: Use NewClient with WithAltURLs instead
 func NewClientWithURLsOption(urls []string, net Network, token string) *Client {
@@ -183,6 +202,27 @@ func createHTTPClient(token string) *http.Client {
 // NewCustomClient creates a new RPC client for a custom/private network
 // Deprecated: Use NewClient with WithNetworkConfig instead
 func NewCustomClient(config NetworkConfig) (*Client, error) {
+	if err := ValidateNetworkConfig(config); err != nil {
+		return nil, err
+	}
+
+	horizonClient := &horizonclient.Client{
+		HorizonURL: config.HorizonURL,
+		HTTP:       http.DefaultClient,
+	}
+
+	sorobanURL := config.SorobanRPCURL
+	if sorobanURL == "" {
+		sorobanURL = config.HorizonURL
+	}
+
+	return &Client{
+		Horizon:      horizonClient,
+		Network:      "custom",
+		SorobanURL:   sorobanURL,
+		Config:       config,
+		CacheEnabled: true,
+	}, nil
 	return NewClient(WithNetworkConfig(config))
 }
 
