@@ -88,6 +88,20 @@ fn execute_operations(host: &Host, operations: &[Operation]) -> Result<Vec<Strin
     Ok(logs)
 }
 
+fn decode_error(msg: &str) -> String {
+    if msg.contains("out of bounds memory access") {
+        "VM Trap: Out of Bounds Access".to_string()
+    } else if msg.contains("unreachable") {
+        "VM Trap: Unreachable Instruction".to_string()
+    } else if msg.contains("integer divide by zero") {
+        "VM Trap: Division by Zero".to_string()
+    } else if msg.contains("stack overflow") {
+        "VM Trap: Stack Overflow".to_string()
+    } else {
+        msg.to_string()
+    }
+}
+
 fn categorize_events(events: &soroban_env_host::events::Events) -> Vec<CategorizedEvent> {
     events
         .0
@@ -425,12 +439,15 @@ fn main() {
         }
         Ok(Err(host_error)) => {
             // Host error during execution (e.g., contract trap, validation failure)
+            let error_msg = format!("{:?}", host_error);
+            let decoded_msg = decode_error(&error_msg);
+            
             let structured_error = StructuredError {
                 error_type: "HostError".to_string(),
-                message: format!("{:?}", host_error),
+                message: decoded_msg.clone(),
                 details: Some(format!(
-                    "Contract execution failed with host error: {:?}",
-                    host_error
+                    "Contract execution failed with host error: {}",
+                    decoded_msg
                 )),
             };
 
@@ -480,7 +497,10 @@ mod tests {
 
     #[test]
     fn test_decode_vm_traps() {
-        let msg = decode_error("Error: Wasm Trap: out of bounds memory access");
-        assert!(msg.contains("VM Trap: Out of Bounds Access"));
+        assert!(decode_error("Error: Wasm Trap: out of bounds memory access").contains("VM Trap: Out of Bounds Access"));
+        assert!(decode_error("Panic: unreachable").contains("VM Trap: Unreachable Instruction"));
+        assert!(decode_error("integer divide by zero").contains("VM Trap: Division by Zero"));
+        assert!(decode_error("stack overflow occurred").contains("VM Trap: Stack Overflow"));
+        assert_eq!(decode_error("normal error"), "normal error");
     }
 }
