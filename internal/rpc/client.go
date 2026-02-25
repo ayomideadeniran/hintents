@@ -130,6 +130,15 @@ func (e *AllNodesFailedError) Error() string {
 	return fmt.Sprintf("all RPC endpoints failed: [%s]", strings.Join(reasons, ", "))
 }
 
+// Unwrap returns all per-node errors so errors.Is and errors.As can traverse them.
+func (e *AllNodesFailedError) Unwrap() []error {
+	errs := make([]error, len(e.Failures))
+	for i, f := range e.Failures {
+		errs[i] = f.Reason
+	}
+	return errs
+}
+
 // isHealthy checks if an endpoint is currently healthy or if circuit is open
 func (c *Client) isHealthy(url string) bool {
 	c.mu.RLock()
@@ -229,6 +238,11 @@ func (c *Client) rotateURL() bool {
 	}
 
 	c.HorizonURL = c.AltURLs[c.currIndex]
+	// Keep SorobanURL in sync with HorizonURL when they were previously identical
+	// so that health checks and Soroban RPC calls reflect the failover.
+	if c.SorobanURL != "" {
+		c.SorobanURL = c.HorizonURL
+	}
 	httpClient := c.httpClient
 	if httpClient == nil {
 		httpClient = createHTTPClient(c.token)
@@ -861,7 +875,12 @@ func (c *Client) getHealthAttempt(ctx context.Context) (*GetHealthResponse, erro
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Prefer SorobanURL but fall back to the currently active HorizonURL so that
+	// rotateURL-triggered failovers are reflected in health checks.
 	targetURL := c.SorobanURL
+	if targetURL == "" {
+		targetURL = c.HorizonURL
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
