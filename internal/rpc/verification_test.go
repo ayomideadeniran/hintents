@@ -5,7 +5,7 @@ package rpc
 
 import (
 	"encoding/base64"
-	"strings"
+	"fmt"
 	"testing"
 
 	"github.com/stellar/go-stellar-sdk/xdr"
@@ -31,13 +31,17 @@ func TestVerifyLedgerEntryHash_ValidKey(t *testing.T) {
 	keyVal := xdr.ScVal{
 		Type: xdr.ScValTypeScvSymbol,
 		Sym:  &sym,
+	symbol := xdr.ScSymbol("COUNTER")
+	keyVal := xdr.ScVal{
+		Type: xdr.ScValTypeScvSymbol,
+		Sym:  &symbol,
 	}
 
 	ledgerKey := xdr.LedgerKey{
 		Type: xdr.LedgerEntryTypeContractData,
 		ContractData: &xdr.LedgerKeyContractData{
-			Contract: contractAddr,
-			Key:      keyVal,
+			Contract:   contractAddr,
+			Key:        keyVal,
 			Durability: xdr.ContractDataDurability(xdr.ContractDataDurabilityPersistent),
 		},
 	}
@@ -214,13 +218,17 @@ func createTestLedgerKey(t *testing.T, seed int) string {
 	keyVal := xdr.ScVal{
 		Type: xdr.ScValTypeScvSymbol,
 		Sym:  &sym,
+	symbol := xdr.ScSymbol("COUNTER")
+	keyVal := xdr.ScVal{
+		Type: xdr.ScValTypeScvSymbol,
+		Sym:  &symbol,
 	}
 
 	ledgerKey := xdr.LedgerKey{
 		Type: xdr.LedgerEntryTypeContractData,
 		ContractData: &xdr.LedgerKeyContractData{
-			Contract: contractAddr,
-			Key:      keyVal,
+			Contract:   contractAddr,
+			Key:        keyVal,
 			Durability: xdr.ContractDataDurability(xdr.ContractDataDurabilityPersistent),
 		},
 	}
@@ -246,7 +254,7 @@ func BenchmarkVerifyLedgerEntries(b *testing.B) {
 	sizes := []int{10, 50, 100, 500}
 
 	for _, size := range sizes {
-		b.Run(strings.Join([]string{"size", string(rune(size))}, "_"), func(b *testing.B) {
+		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
 			requestedKeys := make([]string, size)
 			returnedEntries := make(map[string]string, size)
 

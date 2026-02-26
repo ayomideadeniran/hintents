@@ -49,6 +49,7 @@ func TestSimulateTransactionRetriesOnRateLimit(t *testing.T) {
 		WithNetwork(Testnet),
 		WithHorizonURL(server.URL),
 		WithSorobanURL(server.URL),
+		WithCacheEnabled(false),
 		WithHTTPClient(newRetryHTTPClient()),
 	)
 	if err != nil {
@@ -75,6 +76,7 @@ func TestGetLedgerEntriesRetriesOnRateLimit(t *testing.T) {
 	testKey := validKeys[0]
 
 	var calls int32
+	key := createTestLedgerKey(t, 42)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&calls, 1) == 1 {
@@ -94,6 +96,8 @@ func TestGetLedgerEntriesRetriesOnRateLimit(t *testing.T) {
 			LiveUntilLedger    int    `json:"liveUntilLedgerSeq"`
 		}{{
 			Key: testKey,
+		resp.Result.Entries = []LedgerEntryResult{{
+			Key: key,
 			Xdr: "BBB",
 		}}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -104,6 +108,7 @@ func TestGetLedgerEntriesRetriesOnRateLimit(t *testing.T) {
 		WithNetwork(Testnet),
 		WithHorizonURL(server.URL),
 		WithSorobanURL(server.URL),
+		WithCacheEnabled(false),
 		WithHTTPClient(newRetryHTTPClient()),
 		WithCacheEnabled(false),
 	)
@@ -112,11 +117,13 @@ func TestGetLedgerEntriesRetriesOnRateLimit(t *testing.T) {
 	}
 
 	entries, err := client.GetLedgerEntries(context.Background(), []string{testKey})
+	entries, err := client.GetLedgerEntries(context.Background(), []string{key})
 	if err != nil {
 		t.Fatalf("expected retry to succeed, got error: %v", err)
 	}
 
 	if entries[testKey] != "BBB" {
+	if entries[key] != "BBB" {
 		t.Fatalf("unexpected ledger entry: %v", entries)
 	}
 
