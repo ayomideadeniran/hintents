@@ -35,8 +35,9 @@ type contractStat struct {
 }
 
 var statsCmd = &cobra.Command{
-	Use:   "stats",
-	Short: "Summarize budget usage and call depth for the top contract calls",
+	Use:     "stats",
+	GroupID: "utility",
+	Short:   "Summarize budget usage and call depth for the top contract calls",
 	Long: `Returns a non-interactive table of the top 5 most expensive contract calls.
 
 Cost is estimated based on weighted operations:

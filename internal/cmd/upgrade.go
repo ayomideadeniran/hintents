@@ -21,8 +21,9 @@ var (
 )
 
 var upgradeCmd = &cobra.Command{
-	Use:   "simulate-upgrade <transaction-hash> --new-wasm <path>",
-	Short: "Simulate a transaction with upgraded contract code",
+	Use:     "simulate-upgrade <transaction-hash> --new-wasm <path>",
+	GroupID: "utility",
+	Short:   "Simulate a transaction with upgraded contract code",
 	Long: `Replay a transaction but replace the contract code with a new WASM file.
 This allows verifying if a planned upgrade will break existing functionality.
 

@@ -38,8 +38,9 @@ var (
 
 // compareCmd implements `erst compare`.
 var compareCmd = &cobra.Command{
-	Use:   "compare <transaction-hash>",
-	Short: "Compare replay: local WASM vs on-chain WASM side-by-side",
+	Use:     "compare <transaction-hash>",
+	GroupID: "testing",
+	Short:   "Compare replay: local WASM vs on-chain WASM side-by-side",
 	Long: `Simultaneously replay a transaction against a local WASM file and the on-chain
 contract, then display a side-by-side diff of events, diagnostic output, budget
 usage, and divergent call paths.

@@ -31,8 +31,9 @@ func GetCurrentSession() *session.SessionData {
 }
 
 var sessionCmd = &cobra.Command{
-	Use:   "session",
-	Short: "Manage debugging sessions",
+	Use:     "session",
+	GroupID: "management",
+	Short:   "Manage debugging sessions",
 	Long: `Save, resume, and manage debugging sessions to preserve state across CLI invocations.
 
 Sessions store complete transaction data, simulation results, and analysis context,
