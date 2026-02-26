@@ -6,7 +6,7 @@ use gimli::{self, ColumnType, Dwarf, EndianSlice, Reader, RunTimeEndian, Section
 use object::{Object, ObjectSection};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::path::Path;
+use std::path::PathBuf;
 
 pub struct SourceMapper {
     has_symbols: bool,
@@ -19,6 +19,7 @@ pub struct SourceLocation {
     pub file: String,
     pub line: u32,
     pub column: Option<u32>,
+    pub column_end: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub github_link: Option<String>,
 }
@@ -33,6 +34,15 @@ struct CachedLineEntry {
 impl SourceMapper {
     /// Creates a new SourceMapper with caching enabled
     pub fn new(wasm_bytes: Vec<u8>) -> Self {
+        Self::new_with_options(wasm_bytes, false)
+    }
+
+    /// Creates a new SourceMapper, bypassing the cache when `no_cache` is true.
+    /// When `no_cache` is true, WASM debug symbols are always re-parsed from scratch.
+    pub fn new_with_options(wasm_bytes: Vec<u8>, no_cache: bool) -> Self {
+        if no_cache {
+            eprintln!("--no-cache: skipping cache, re-parsing WASM symbols from scratch.");
+        }
         let has_symbols = Self::check_debug_symbols(&wasm_bytes);
         let git_repo = Self::detect_git_repository();
         
@@ -49,23 +59,10 @@ impl SourceMapper {
         }
     }
 
-    pub fn new_with_path(wasm_bytes: Vec<u8>, source_path: Option<&Path>) -> Self {
-        let has_symbols = Self::check_debug_symbols(&wasm_bytes);
-        let git_repo = source_path
-            .and_then(|p| GitRepository::detect(p))
-            .or_else(|| Self::detect_git_repository());
-        
-        let line_cache = if has_symbols {
-            Self::build_line_cache(&wasm_bytes).unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
-        Self {
-            has_symbols,
-            line_cache,
-            git_repo,
-        }
+    /// Backward-compatible constructor used by tests.
+    #[allow(dead_code)]
+    pub fn new_with_cache(wasm_bytes: Vec<u8>, _cache_dir: PathBuf) -> Self {
+        Self::new(wasm_bytes)
     }
 
     fn detect_git_repository() -> Option<GitRepository> {
@@ -82,6 +79,7 @@ impl SourceMapper {
         }
     }
 
+    #[allow(deprecated)]
     fn build_line_cache(wasm_bytes: &[u8]) -> Result<Vec<CachedLineEntry>, String> {
         let obj_file = object::File::parse(wasm_bytes)
             .map_err(|err| format!("failed to parse wasm object: {err}"))?;
@@ -175,6 +173,7 @@ impl SourceMapper {
                         file: file_name,
                         line: line.get() as u32,
                         column,
+                        column_end: None,
                         github_link: None,
                     };
 
@@ -271,6 +270,7 @@ impl SourceMapper {
             file,
             line,
             column,
+            column_end: None,
             github_link,
         }
     }
@@ -283,6 +283,8 @@ impl SourceMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_map_cache::{SourceMapCache, SourceMapCacheEntry};
+    use tempfile::TempDir;
 
     fn mapper_with_cache(entries: Vec<CachedLineEntry>) -> SourceMapper {
         SourceMapper {
@@ -302,6 +304,16 @@ mod tests {
     }
 
     #[test]
+    fn test_new_with_options_no_cache_still_parses() {
+        let wasm_bytes = vec![0x00, 0x61, 0x73, 0x6d];
+        let mapper = SourceMapper::new_with_options(wasm_bytes, true);
+
+        // Should still work — just re-parsed without cache
+        assert!(!mapper.has_debug_symbols());
+        assert!(mapper.map_wasm_offset_to_source(0x1234).is_none());
+    }
+
+    #[test]
     fn test_cached_lookup_uses_address_ranges() {
         let mapper = mapper_with_cache(vec![
             CachedLineEntry {
@@ -311,6 +323,7 @@ mod tests {
                     file: "lib.rs".into(),
                     line: 10,
                     column: Some(1),
+                    column_end: None,
                     github_link: None,
                 },
             },
@@ -321,6 +334,7 @@ mod tests {
                     file: "lib.rs".into(),
                     line: 20,
                     column: Some(2),
+                    column_end: None,
                     github_link: None,
                 },
             },
@@ -343,6 +357,7 @@ mod tests {
                 file: "mod.rs".into(),
                 line: 7,
                 column: None,
+                column_end: None,
                 github_link: None,
             },
         }]);
@@ -356,6 +371,7 @@ mod tests {
             file: "test.rs".to_string(),
             line: 42,
             column: Some(10),
+            column_end: Some(15),
             github_link: None,
         };
 
@@ -370,6 +386,7 @@ mod tests {
             file: "test.rs".to_string(),
             line: 42,
             column: Some(10),
+            column_end: None,
             github_link: Some("https://github.com/user/repo/blob/abc123/test.rs#L42".to_string()),
         };
 
@@ -377,5 +394,56 @@ mod tests {
         assert!(json.contains("test.rs"));
         assert!(json.contains("42"));
         assert!(json.contains("github.com"));
+    }
+
+    #[test]
+    fn test_source_mapper_with_cache() {
+        let temp_dir = TempDir::new().unwrap();
+        let wasm_bytes = vec![0x00, 0x61, 0x73, 0x6d];
+        let wasm_hash = SourceMapCache::compute_wasm_hash(&wasm_bytes);
+
+        {
+            let mapper =
+                SourceMapper::new_with_options(wasm_bytes.clone(), false);
+            assert!(!mapper.has_debug_symbols());
+            let result = mapper.map_wasm_offset_to_source(0x1234);
+            assert!(result.is_none());
+        }
+
+        let cache = SourceMapCache::with_cache_dir(temp_dir.path().to_path_buf()).unwrap();
+        let entries = cache.list_cached().unwrap();
+        assert_eq!(entries.len(), 0);
+
+        let mut mappings = std::collections::HashMap::new();
+        mappings.insert(
+            0x1234,
+            SourceLocation {
+                file: "test.rs".to_string(),
+                line: 42,
+                column: Some(10),
+                column_end: None,
+                github_link: None,
+            },
+        );
+
+        let entry = SourceMapCacheEntry {
+            wasm_hash: wasm_hash.clone(),
+            has_symbols: true,
+            mappings,
+            created_at: 1234567890,
+        };
+
+        cache.store(entry).unwrap();
+
+        let entries = cache.list_cached().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].wasm_hash, wasm_hash);
+    }
+
+    #[test]
+    fn test_wasm_hash() {
+        let wasm_bytes = vec![0x00, 0x61, 0x73, 0x6d];
+        let hash = SourceMapCache::compute_wasm_hash(&wasm_bytes);
+        assert_eq!(hash.len(), 64);
     }
 }
