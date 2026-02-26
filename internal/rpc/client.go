@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	stdErrors "errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -243,6 +244,7 @@ func (c *Client) rotateURL() bool {
 		HorizonURL: c.HorizonURL,
 		HTTP:       httpClient,
 	}
+	c.SorobanURL = c.AltURLs[c.currIndex]
 
 	logger.Logger.Warn("RPC failover triggered", "new_url", c.HorizonURL)
 	return true
@@ -426,6 +428,13 @@ type GetLedgerEntriesRequest struct {
 	Params  []interface{} `json:"params"`
 }
 
+type LedgerEntryResult = struct {
+	Key                string `json:"key"`
+	Xdr                string `json:"xdr"`
+	LastModifiedLedger int    `json:"lastModifiedLedgerSeq"`
+	LiveUntilLedger    int    `json:"liveUntilLedgerSeq"`
+}
+
 type GetLedgerEntriesResponse struct {
 	Jsonrpc string `json:"jsonrpc"`
 	ID      int    `json:"id"`
@@ -471,7 +480,13 @@ type LedgerEntryResult struct {
 // GetLedgerHeader fetches ledger header details for a specific sequence with automatic fallback.
 func (c *Client) GetLedgerHeader(ctx context.Context, sequence uint32) (*LedgerHeaderResponse, error) {
 	if len(c.AltURLs) == 0 {
-		return nil, &AllNodesFailedError{}
+		resp, err := c.getLedgerHeaderAttempt(ctx, sequence)
+		if err != nil {
+			c.markFailure(c.HorizonURL)
+			return nil, err
+		}
+		c.markSuccess(c.HorizonURL)
+		return resp, nil
 	}
 	var failures []NodeFailure
 	for attempt := 0; attempt < len(c.AltURLs); attempt++ {
@@ -576,12 +591,37 @@ func (c *Client) handleLedgerError(err error, sequence uint32) error {
 
 // IsLedgerNotFound checks if error is a "ledger not found" error
 func IsLedgerNotFound(err error) bool {
-	return errors.Is(err, errors.ErrLedgerNotFound)
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, errors.ErrLedgerNotFound) {
+		return true
+	}
+	return ledgerFailureContains(err, IsLedgerNotFound)
+}
+
+func ledgerFailureContains(err error, checker func(error) bool) bool {
+	var allErr *AllNodesFailedError
+	if !stdErrors.As(err, &allErr) {
+		return false
+	}
+	for _, failure := range allErr.Failures {
+		if checker(failure.Reason) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsLedgerArchived checks if error is a "ledger archived" error
 func IsLedgerArchived(err error) bool {
-	return errors.Is(err, errors.ErrLedgerArchived)
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, errors.ErrLedgerArchived) {
+		return true
+	}
+	return ledgerFailureContains(err, IsLedgerArchived)
 }
 
 // IsRateLimitError checks if error is a rate limit error
