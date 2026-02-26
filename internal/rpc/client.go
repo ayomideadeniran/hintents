@@ -669,6 +669,11 @@ func (c *Client) getLedgerEntriesAttempt(ctx context.Context, keysToFetch []stri
 		return nil, errors.WrapMarshalFailed(err)
 	}
 
+	// Validate payload size before attempting to send to network
+	if err := ValidatePayloadSize(int64(len(bodyBytes))); err != nil {
+		return nil, err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return nil, errors.WrapRPCConnectionFailed(err)
@@ -961,6 +966,11 @@ func (c *Client) simulateTransactionAttempt(ctx context.Context, envelopeXdr str
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, errors.WrapMarshalFailed(err)
+	}
+
+	// Validate payload size before attempting to send to network
+	if err := ValidatePayloadSize(int64(len(bodyBytes))); err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewBuffer(bodyBytes))
