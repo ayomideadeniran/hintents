@@ -1111,10 +1111,14 @@ func init() {
 	debugCmd.Flags().BoolVar(&demoMode, "demo", false, "Print sample output (no network) - for testing color detection")
 	debugCmd.Flags().BoolVar(&watchFlag, "watch", false, "Poll for transaction on-chain before debugging")
 	debugCmd.Flags().IntVar(&watchTimeoutFlag, "watch-timeout", 30, "Timeout in seconds for watch mode")
-	debugCmd.Flags().Int64Var(&mockTimeFlag, "mock-time", 0, "Override timestamp used by simulator")
-	debugCmd.Flags().Uint32Var(&protocolVersionFlag, "protocol-version", 0, "Override protocol version used by simulator")
+	debugCmd.Flags().Int64Var(&mockTimeFlag, "mock-time", 0, "Override ledger timestamp (Unix epoch) for simulation")
+	debugCmd.Flags().Uint32Var(&protocolVersionFlag, "protocol-version", 0, "Override protocol version for simulation")
 	debugCmd.Flags().Uint32Var(&mockBaseFeeFlag, "mock-base-fee", 0, "Override base fee (stroops) for local fee sufficiency checks")
 	debugCmd.Flags().Uint64Var(&mockGasPriceFlag, "mock-gas-price", 0, "Override gas price multiplier for local fee sufficiency checks")
+
+	_ = debugCmd.RegisterFlagCompletionFunc("network", completeNetworkFlag)
+	_ = debugCmd.RegisterFlagCompletionFunc("compare-network", completeNetworkFlag)
+	_ = debugCmd.RegisterFlagCompletionFunc("theme", completeThemeFlag)
 
 	rootCmd.AddCommand(debugCmd)
 }

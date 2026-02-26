@@ -122,18 +122,16 @@ func parseWASM(data []byte) (*Parser, error) {
 	// For WASM, we need to look for custom sections starting with ".debug_"
 	sections := parseWASMSections(data)
 
-	infoSec := sections[".debug_info"]
-	lineSec := sections[".debug_line"]
-	strSec := sections[".debug_str"]
-	abbrevSec := sections[".debug_abbrev"]
-	rangesSec := sections[".debug_ranges"]
-
-	var dwarfData *dwarf.Data
-	var err error
-	if infoSec != nil {
-		dwarfData, err = dwarf.New(infoSec, abbrevSec, nil, strSec, lineSec, nil, rangesSec, nil)
+	infoSec, ok := sections[".debug_info"]
+	if !ok || len(infoSec) == 0 {
+		return nil, ErrNoDebugInfo
 	}
+	abbrevSec, _ := sections[".debug_abbrev"]
+	lineSec, _ := sections[".debug_line"]
+	rangesSec, _ := sections[".debug_ranges"]
+	strSec, _ := sections[".debug_str"]
 
+	dwarfData, err := dwarf.New(abbrevSec, nil, nil, infoSec, lineSec, nil, rangesSec, strSec)
 	if dwarfData == nil || err != nil {
 		return nil, ErrNoDebugInfo
 	}
