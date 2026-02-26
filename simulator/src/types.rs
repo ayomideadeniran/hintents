@@ -44,6 +44,8 @@ pub struct ResourceCalibration {
 pub struct SimulationResponse {
     pub status: String,
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
     pub events: Vec<String>,
     pub diagnostic_events: Vec<DiagnosticEvent>,
     pub categorized_events: Vec<CategorizedEvent>,

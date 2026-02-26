@@ -29,6 +29,8 @@ use tracing_subscriber::{fmt, EnvFilter};
 
 // Use types::SimulationRequest directly
 
+const ERR_MEMORY_LIMIT_EXCEEDED: &str = "ERR_MEMORY_LIMIT_EXCEEDED";
+
 fn init_logger() {
     // Check if the environment variable ERST_LOG_FORMAT is set to "json"
     let use_json = env::var("ERST_LOG_FORMAT")
@@ -56,6 +58,7 @@ fn send_error(msg: String) {
     let res = SimulationResponse {
         status: "error".to_string(),
         error: Some(msg),
+        error_code: None,
         events: vec![],
         diagnostic_events: vec![],
         categorized_events: vec![],
@@ -76,20 +79,40 @@ fn send_error(msg: String) {
     std::process::exit(1);
 }
 
-fn execute_operations(host: &Host, operations: &[Operation]) -> Result<Vec<String>, HostError> {
+fn check_memory_limit_or_panic(host: &Host, memory_limit: Option<u64>) {
+    if let Some(limit) = memory_limit {
+        if let Ok(mem_bytes) = host.budget_cloned().get_mem_bytes_consumed() {
+            if mem_bytes > limit {
+                panic!(
+                    "{}: consumed {} bytes, limit {} bytes",
+                    ERR_MEMORY_LIMIT_EXCEEDED, mem_bytes, limit
+                );
+            }
+        }
+    }
+}
+
+fn execute_operations(
+    host: &Host,
+    operations: &[Operation],
+    memory_limit: Option<u64>,
+) -> Result<Vec<String>, HostError> {
     let mut logs = Vec::new();
+    check_memory_limit_or_panic(host, memory_limit);
     for op in operations {
         match &op.body {
             OperationBody::InvokeHostFunction(invoke_op) => {
                 logs.push("Executing InvokeHostFunction...".to_string());
                 let val = host.invoke_function(invoke_op.host_function.clone())?;
                 logs.push(format!("Result: {val:?}"));
+                check_memory_limit_or_panic(host, memory_limit);
             }
             _ => {
                 logs.push(format!(
                     "Skipping non-Soroban operation: {:?}",
                     op.body.name()
                 ));
+                check_memory_limit_or_panic(host, memory_limit);
             }
         }
     }
@@ -208,6 +231,7 @@ fn main() {
         let res = SimulationResponse {
             status: "error".to_string(),
             error: Some(format!("Failed to read stdin: {e}")),
+            error_code: None,
             events: vec![],
             diagnostic_events: vec![],
             categorized_events: vec![],
@@ -236,6 +260,7 @@ fn main() {
             let res = SimulationResponse {
                 status: "error".to_string(),
                 error: Some(format!("Invalid JSON: {e}")),
+                error_code: None,
                 events: vec![],
                 diagnostic_events: vec![],
                 categorized_events: vec![],
@@ -413,7 +438,7 @@ fn main() {
 
     // Wrap the operation execution in panic protection
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        execute_operations(&host, operations)
+        execute_operations(&host, operations, request.memory_limit)
     }));
 
     // Budget and Reporting
@@ -554,6 +579,7 @@ fn main() {
                             "insufficient fee (mocked): declared {} stroops, required {} stroops",
                             declared_fee, required_fee
                         )),
+                        error_code: None,
                         events,
                         diagnostic_events,
                         categorized_events,
@@ -579,6 +605,7 @@ fn main() {
             let response = SimulationResponse {
                 status: "success".to_string(),
                 error: None,
+                error_code: None,
                 events,
                 diagnostic_events,
                 categorized_events,
@@ -637,6 +664,7 @@ fn main() {
                         format!("Internal error during error serialization: {}", e)
                     }),
                 ),
+                error_code: None,
                 events: vec![],
                 diagnostic_events: vec![],
                 categorized_events: vec![],
@@ -665,10 +693,20 @@ fn main() {
             };
 
             let wasm_trace = WasmStackTrace::from_panic(&panic_msg);
+            let memory_limit_exceeded = panic_msg.contains(ERR_MEMORY_LIMIT_EXCEEDED);
 
             let response = SimulationResponse {
                 status: "error".to_string(),
-                error: Some(format!("Simulator panicked: {panic_msg}")),
+                error: Some(if memory_limit_exceeded {
+                    panic_msg.clone()
+                } else {
+                    format!("Simulator panicked: {panic_msg}")
+                }),
+                error_code: if memory_limit_exceeded {
+                    Some(ERR_MEMORY_LIMIT_EXCEEDED.to_string())
+                } else {
+                    None
+                },
                 events: vec![],
                 diagnostic_events: vec![],
                 categorized_events: vec![],

@@ -26,6 +26,7 @@ type SimulationRequest struct {
 	ProtocolVersion *uint32           `json:"protocol_version,omitempty"`
 	MockBaseFee     *uint32           `json:"mock_base_fee,omitempty"`
 	MockGasPrice    *uint64           `json:"mock_gas_price,omitempty"`
+	MemoryLimit     *uint64           `json:"memory_limit,omitempty"`
 
 	//New: restorePreamble for state restoration operations
 	RestorePreamble map[string]interface{} `json:"restore_preamble,omitempty"`
@@ -80,6 +81,7 @@ type BudgetUsage struct {
 type SimulationResponse struct {
 	Status            string               `json:"status"` // "success" or "error"
 	Error             string               `json:"error,omitempty"`
+	ErrorCode         string               `json:"error_code,omitempty"`
 	Events            []string             `json:"events,omitempty"`            // Raw event strings (backward compatibility)
 	DiagnosticEvents  []DiagnosticEvent    `json:"diagnostic_events,omitempty"` // Structured diagnostic events
 	Logs              []string             `json:"logs,omitempty"`              // Host debug logs
